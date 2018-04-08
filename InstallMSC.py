@@ -355,6 +355,20 @@ def installKong():
     with open(r'/etc/kong/kong.conf',mode='w') as f:
         f.write(TmpFileContent)
 
+    ###用户输入需要部署微服务后台的IP  ###
+    MSCServerIP=None
+    while True:
+        MSCServerIP=raw_input('输入"微服务"后台程序所在IP地址：')
+        MSCServerIP=MSCServerIP.strip()
+        if not isIPValid(MSCServerIP):
+            print (TextColorRed+'输入的IP地址无效：'+str(MSCServerIP)+',请重试!'+TextColorWhite)
+            continue
+        break
+
+    ## MSC 后端服务器IP 需要修改成实际值##
+    TmpMscHttpLog=JSONScript.MscHttpLog
+    TmpMscHttpLog['config']['http_endpoint']=TmpMscHttpLog['config']['http_endpoint']%(MSCServerIP,)
+
     if subprocess.call('luarocks install install_package/kong_packages/kong-plugin-non-restful-request-filter-0.1.0-1.all.rock',shell=True):
         print (TextColorRed+'Kong插件安装失败，程序退出'+TextColorWhite)
         exit(1)
@@ -391,7 +405,7 @@ def installKong():
         exit(1)
 
     TmpResult=sendHttpRequest(host='127.0.0.1',port=8001,url='/plugins',method='POST',
-                    body=JSONScript.MscHttpLog,header={'Content-Type':'application/json'})
+                    body=TmpMscHttpLog,header={'Content-Type':'application/json'})
     print (TmpResult)
     TmpResult=sendHttpRequest(host='127.0.0.1',port=8001,url='/plugins',method='POST',
                     body=JSONScript.Cors,header={'Content-Type':'application/json'})

@@ -4,7 +4,7 @@ class JSONScript:
     MscHttpLog={
         'name':'msc-http-log',
         'config':{
-            'http_endpoint':'http://127.0.0.1:9001/kong'
+            'http_endpoint':'http://%s:9001/kong'
         }
     }
 
