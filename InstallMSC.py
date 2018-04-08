@@ -12,6 +12,7 @@ import json
 import httplib
 import sys
 from resource import setrlimit,getrlimit,RLIMIT_NOFILE
+from commands import getoutput
 from JSONScript import JSONScript
 
 
@@ -27,7 +28,9 @@ EnableLocalYum=False
 
 validAppNameList=['java','kong','cassandra',
                  'elasticsearch','logstash'
-                 ,'mariadb']
+                 ,'mariadb','redis']
+
+CPUCores='1' if getoutput("lscpu|grep '^CPU(s)'|awk '{print $2}'")=='1' else getoutput("lscpu|grep '^CPU(s)'|awk '{print $2}'")
 
 AppInstalledState={}
 
@@ -563,6 +566,61 @@ def configElasticsearch():
     print (TextColorGreen+'成功配置Elasticsearch@'+TmpIP+':9200'+TextColorWhite)
 
 
+def installRedis():
+    print (TextColorWhite+'即将安装Redis,请稍候...'+TextColorWhite)
+    InternetState=checkInternetConnection()
+    if InternetState['RetCode']!=0:
+       print (TextColorRed+InternetState['Description']+TextColorWhite)
+       print (TextColorRed+'Redis安装失败，程序退出。'+TextColorWhite)
+       AppInstalledState['redis']='not ok'
+       exit(1)
+    print (TextColorGreen+'网络检测畅通,安装继续。'+TextColorWhite)
+    if  subprocess.call('yum install -y tcl gcc gcc-c++',shell=True):
+       print (TextColorRed+'联网安装tcl失败，程序退出。'+TextColorWhite)
+       AppInstalledState['redis']='not ok'
+       exit(1)
+    if subprocess.call('cd install_package/;tar -xvzf redis-stable.tar.gz',shell=True):
+       print (TextColorRed+'解压Redis压缩包失败，程序退出。'+TextColorWhite)
+       AppInstalledState['redis']='not ok'
+       exit(1)
+
+    if subprocess.call('cd install_package/redis-stable;make -j %s'%(CPUCores,),shell=True):
+       print (TextColorRed+'Redis 安装失败，程序退出。'+TextColorWhite)
+       AppInstalledState['redis']='not ok'
+       exit(1)
+
+    if subprocess.call('cd install_package/redis-stable;make install',shell=True):
+       print (TextColorRed+'Redis 安装失败，程序退出.'+TextColorGreen)
+       AppInstalledState['redis']='not ok'
+       exit(1)
+#    print (TextColorGreen+'Redis 安装成功.'+TextColorWhite)
+    AppInstalledState['redis']='ok'
+
+
+    ####### 配置 redis #####
+    with open(r'install_package/redis_conf/redis',mode='r') as f:
+       TmpFileContent=f.read()
+
+    with open(r'/etc/init.d/redis',mode='w') as f:
+       f.write(TmpFileContent)
+
+    subprocess.call('chmod 777 /etc/init.d/redis;systemctl daemon-reload',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    with open(r'install_package/redis_conf/redis.conf',mode='r') as f:
+        TmpFileContent=f.read()
+
+    TmpRedisPasswd=raw_input('请输入Redis密码，并按回车(直接回车将使用默认密码:trs@admin)：')
+    TmpRedisPasswd=TmpRedisPasswd.strip()
+    if len(TmpRedisPasswd)==0:
+       print (TextColorGreen+'未输入任何密码，使用默认密码'+TextColorWhite)
+    else:
+       TmpFileContent=re.sub(r'^(\s*requirepass)(.*?)\n',r'\g<1>  '+TmpRedisPasswd+'\n\n',TmpFileContent,flags=re.MULTILINE)
+
+    with open(r'/etc/redis.conf',mode='w') as f:
+       f.write(TmpFileContent)
+
+    print (TextColorGreen+'Redis 安装成功.'+TextColorWhite)
+
+
 def installLogstash():
    if path.exists(r'/TRS/APP/logstash'):
       print (TextColorRed+'/TRS/APP 目录下已经存在一个名为logstash的文件或目录，请对其删除或重命名备份，'+TextColorWhite)
@@ -700,6 +758,7 @@ def RunMenu():
           print ('           5、配置已有 Elasticsearch("对环境中现有的ES 进行复用")')
           print ('           6、安装Logstash')
           print ('           7、安装MariaDB(YUM 方式安装)')
+          print ('           8、安装Redis;')
           print ('           0、退出安装;'+TextColorWhite)
 
           choice=raw_input('请输入数值序号:')
@@ -737,6 +796,11 @@ def RunMenu():
                 print (TextColorGreen+'Mariadb 已经安装，无需重复安装'+TextColorWhite)
                 continue
              installMariadb()
+          elif choice=='8':
+              if ('redis' in AppInstalledState) and (AppInstalledState['redis']=='ok'):
+                  print (TextColorGreen+'Redis 已经安装，无需重复安装'+TextColorWhite)
+                  continue
+              installRedis()
           elif  choice=='0':
              exit(0)
     except Exception as e:
