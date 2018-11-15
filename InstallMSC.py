@@ -270,7 +270,9 @@ def installJava():
        OutputFile.write('export  JRE_HOME='+JavaEnvironDict['JRE_HOME']+'\n')
        OutputFile.close()
     AppInstalledState['java']='ok'
+    subprocess.call('source /etc/profile',shell=True)
     print (TextColorGreen+'JAVA 环境变量配置完毕!'+TextColorWhite)
+
 
 
 
